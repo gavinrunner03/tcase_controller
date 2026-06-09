@@ -33,12 +33,13 @@ void update_outputs(inputs *input_values, outputs *output_values);
 
 int main(){
     inputs input_values = {0, 0, 0, 0, 0, 0, 0};
-    outputs output_values = {0, 0, 0};
+    outputs output_values = {0, 0, 50};
     watchdog_setup();
 
     while(1){
-        poll_mode(&input_values);
         poll_buttons(&input_values);
+        poll_mode(&input_values);
+        
         update_outputs(&input_values, &output_values);
     }
     return 0;
@@ -52,8 +53,13 @@ void watchdog_setup(){
 void poll_mode(inputs *input_values){
     //mode select = button poll
     //diff lock = button poll
+    if(input_values->mode_select == 0){
+        input_values->mode_select = 0; // 2WD, ignore the diff lock button since it does not affect 2WD mode
+    }
+    else if(input_values->mode_select == 1){
+        input_values->mode_select = input_values->mode_select + input_values->differential_lock; //diff lock can be either 0 or 1, the mode select is also 0 or 1, so range is 0->2
+    }
     
-    input_values->mode_select = input_values->mode_select + input_values->differential_lock; //diff lock can be either 0 or 1, the mode select is also 0 or 1, so range is 0->2
 }
 void poll_buttons(inputs *input_values){
     
@@ -74,14 +80,12 @@ void update_outputs(inputs *input_values, outputs *output_values){
                 /* 2WD Mode */
                     if(input_values->position_awd || input_values->position_4wd){
                         // If the system is currently in AWD or 4WD, we need to reverse the motor to get back to 2WD
-                        output_values->motor_direction = 1; // Move in reverse
-                        output_values->motor_speed = 50; // Set a moderate speed
                         if(!input_values->position_2wd){
                             output_values->motor_direction = 1; // Enable the motor
                         }
                         while(!input_values->position_2wd){
-                            poll_mode(input_values); // Keep polling the mode to update the position sensors
                             poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
+                            poll_mode(input_values); // Keep polling the mode to update the position sensors
                         }
                         output_values->motor_direction = 0; // Disable the motor once we are in 2WD
                     }
@@ -96,22 +100,22 @@ void update_outputs(inputs *input_values, outputs *output_values){
                     if(input_values->position_4wd){
                         // If the system is currently in 4WD, we need to reverse the motor to get back to AWD
                         if(!input_values->position_awd){
-                            output_values->motor_direction = 1; // Enable the motor
+                            output_values->motor_direction = 1; // reverse the motor if in 4wd
                         }
                         while(!input_values->position_awd){ // Wait until we are out of 4WD and in AWD
-                            poll_mode(input_values); // Keep polling the mode to update the position sensors
                             poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
+                            poll_mode(input_values); // Keep polling the mode to update the position sensors
                         }
                         output_values->motor_direction = 0; // Disable the motor once we are in AWD
                     }
                     else if(input_values->position_2wd){
                         // If the system is currently in 2WD, we need to move the motor forward
                         if(!input_values->position_awd){
-                        output_values->motor_direction = 1; // Enable the motor
+                        output_values->motor_direction = 2; // motor forward if in 2wd
                         }
                         while(!input_values->position_awd){
-                            poll_mode(input_values); // Keep polling the mode to update the position sensors
                             poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
+                            poll_mode(input_values); // Keep polling the mode to update the position sensors
                         }
                         output_values->motor_direction = 0; // Disable the motor once the position is reached
                     }
@@ -125,8 +129,8 @@ void update_outputs(inputs *input_values, outputs *output_values){
                     }
                     output_values->motor_speed = 50; // Set a moderate speed
                     while(!input_values->position_4wd){
-                        poll_mode(input_values); // Keep polling the mode to update the position sensors
                         poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
+                        poll_mode(input_values); // Keep polling the mode to update the position sensors
                     }
                     output_values->motor_direction = 0; // Disable the motor once the position is reached
                 break;
@@ -149,8 +153,8 @@ void update_outputs(inputs *input_values, outputs *output_values){
                 output_values->motor_direction = 2; // Move forward only if not already in 4WD
             }
             while(!input_values->position_4wd){
-                poll_mode(input_values); // Keep polling the mode to update the position sensors
                 poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
+                poll_mode(input_values); // Keep polling the mode to update the position sensors
             }
             output_values->motor_direction = 0; // Disable the motor once the position is reached
         break;

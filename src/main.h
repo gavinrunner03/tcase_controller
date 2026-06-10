@@ -50,6 +50,13 @@ typedef struct {
 #define GPIOD             ((GPIO_TypeDef *) GPIOD_BASE)
 #define RCC               ((RCC_TypeDef *) RCC_BASE)
 
+/* Mode Definition */
+#define HIGH_RANGE 0 
+#define LOW_RANGE 1
+#define MODE_2WD    0
+#define MODE_AWD    1
+#define MODE_4WD    2
+
 /* End STM Register Definitions */
 /* Begin Input/Output Structures */
 typedef struct {
@@ -70,16 +77,20 @@ typedef struct {
     *  PA8  | Motor Phase 2 Control
     *  PC6  | Global Chip Wakeup
     */
-    int target_mode; // This will be 0 for 2wd, 1 for awd, and 2 for 4wd
     int motor_direction; // This will be 2 for forward, 1 for reverse, and 0 for stop
     int motor_speed; // This will be a value from 0 to 100 representing the speed of the motor
 } outputs;
 
+typedef struct {
+    int current_mode; // This will be 0 for 2wd, 1 for awd, and 2 for 4wd
+    int target_mode; // This will be 0 for 2wd, 1 for awd, and 2 for 4wd
+} state;
+
+
 
 /* Begin Function Prototypes */
 void watchdog_setup();
-void poll_mode(inputs *input_values);
-void poll_buttons(inputs *input_values);
+void poll_inputs(inputs *input_values, state *current_states);
 void update_outputs(inputs *input_values, outputs *output_values);
 int gpio_init(void);
 /* Begin Function Definitions */
@@ -130,27 +141,73 @@ int gpio_init(void){
     GPIOC->MODER &= ~(3 << (6 * 2)); // Clear mode for PC6
     GPIOC->MODER |= (1 << (6 * 2)); // Set PC6 as output
 
-    return 0;
+    return 0; // Return 0 for success
 }
+
 
 void watchdog_setup(){
     /* Watchdog timer so that the system resets if for some reaason the 
     MCU gets stuck. Once reset, the default mode will be AWD */
 }
 
-void poll_mode(inputs *input_values){
-    //mode select = button poll
-    //diff lock = button poll
-    if(input_values->mode_select == 0){
-        input_values->mode_select = 0; // 2WD, ignore the diff lock button since it does not affect 2WD mode
+void poll_inputs(inputs *input_values, state *current_states){
+    /* Check Sensors */
+    if(GPIOC->IDR & (1 << 7)){ // Check PC7
+        input_values->position_2wd = 1;
+    } else {
+        input_values->position_2wd = 0;
     }
-    else if(input_values->mode_select == 1){
-        input_values->mode_select = input_values->mode_select + input_values->differential_lock; //diff lock can be either 0 or 1, the mode select is also 0 or 1, so range is 0->2
+    if(GPIOB->IDR & (1 << 4)){ // Check PB4
+        input_values->position_awd = 1;
+    } else {
+        input_values->position_awd = 0;
     }
-    
-}
-void poll_buttons(inputs *input_values){
-    
+    if(GPIOA->IDR & (1 << 10)){ // Check PA10
+        input_values->position_4wd = 1;
+    } else {
+        input_values->position_4wd = 0;
+    }
+    if((GPIOB->IDR & (1 << 0))){ // Check PB0
+        input_values->low_range = 1;
+    } else {
+        input_values->low_range = 0;
+    }
+    if((GPIOA->IDR & (1 << 9))){ // Check PA9
+        input_values->neutral_safety_switch = 1;
+    } else {    
+        input_values->neutral_safety_switch = 0;
+    }
+
+    /* check buttons */
+        if(!(GPIOB->IDR & (1 << 3))){ // Check PB3
+        input_values->differential_lock = 1;
+    } else {
+        input_values->differential_lock = 0;
+    }
+    if(!(GPIOC->IDR & (1 << 4))){ // Check PC4
+        input_values->mode_select = 1;
+    } else {
+        input_values->mode_select = 0;
+    }
+    /* 
+    * Determine the target based on the inputs 
+    * Determines the target mode based on the button inputs and also the 
+    * LOW range sensor override. If the diff lock sensor is active, then
+    * the system should immediately go to 4WD (locked) mode to protect the gears.
+    */
+    if(input_values->differential_lock && input_values->mode_select){
+        current_states->target_mode = MODE_4WD; //MODE 4WD is the LOCKED 4WD mode 
+    } 
+    else if (input_values->low_range){
+        current_states->target_mode = MODE_4WD; // If low range is selected, we want to be in 4WD (locked) mode to protect the gears
+    }
+    else {
+        if(input_values->mode_select){
+            current_states->target_mode = MODE_AWD;
+        } else {
+            current_states->target_mode = MODE_2WD;
+        }
+    }
 }
 
 void update_outputs(inputs *input_values, outputs *output_values){
@@ -161,92 +218,26 @@ void update_outputs(inputs *input_values, outputs *output_values){
                         4WD LO | Low range button ON                    | 4WD Sensor HIGH
                         */
     switch(input_values->low_range){
-        case 0:
-        /* The normal case, do not force 4WD Locked*/
-            switch(input_values->mode_select){
-                case 0:
-                /* 2WD Mode */
-                    if(input_values->position_awd || input_values->position_4wd){
-                        // If the system is currently in AWD or 4WD, we need to reverse the motor to get back to 2WD
-                        if(!input_values->position_2wd){
-                            output_values->motor_direction = 1; // Enable the motor
-                        }
-                        while(!input_values->position_2wd){
-                            poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
-                            poll_mode(input_values); // Keep polling the mode to update the position sensors
-                        }
-                        output_values->motor_direction = 0; // Disable the motor once we are in 2WD
-                    }
-                    else{
-                        // If we are already in 2WD, do nothing
-                        output_values->motor_direction = 0; // Ensure the motor is disabled
-                    }
-                break;
-
-                case 1:
-                /* AWD Mode */
-                    if(input_values->position_4wd){
-                        // If the system is currently in 4WD, we need to reverse the motor to get back to AWD
-                        if(!input_values->position_awd){
-                            output_values->motor_direction = 1; // reverse the motor if in 4wd
-                        }
-                        while(!input_values->position_awd){ // Wait until we are out of 4WD and in AWD
-                            poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
-                            poll_mode(input_values); // Keep polling the mode to update the position sensors
-                        }
-                        output_values->motor_direction = 0; // Disable the motor once we are in AWD
-                    }
-                    else if(input_values->position_2wd){
-                        // If the system is currently in 2WD, we need to move the motor forward
-                        if(!input_values->position_awd){
-                        output_values->motor_direction = 2; // motor forward if in 2wd
-                        }
-                        while(!input_values->position_awd){
-                            poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
-                            poll_mode(input_values); // Keep polling the mode to update the position sensors
-                        }
-                        output_values->motor_direction = 0; // Disable the motor once the position is reached
-                    }
-                break;
-
-                case 2:
-                /* 4WD Mode */
-                    output_values->target_mode = 2;
-                    if(!input_values->position_4wd){
-                        output_values->motor_direction = 2; // Move forward only if not already in 4WD
-                    }
-                    output_values->motor_speed = 50; // Set a moderate speed
-                    while(!input_values->position_4wd){
-                        poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
-                        poll_mode(input_values); // Keep polling the mode to update the position sensors
-                    }
-                    output_values->motor_direction = 0; // Disable the motor once the position is reached
-                break;
-
-            }
-        break;
-
-        case 1:
-        /* Force 4WD Locked due to Low Range */
-            if(input_values->position_2wd){
-                // If the system is currently in 2WD, we need to move the motor forward
-                output_values->motor_direction = 2; // Enable the motor
-            }
-            else if(input_values->position_awd){
-                // If the system is currently in AWD, we need to move the motor forward
-                output_values->motor_direction = 2; // Enable the motor
-            }
-            output_values->target_mode = 2;
-            if(!input_values->position_4wd){
-                output_values->motor_direction = 2; // Move forward only if not already in 4WD
-            }
-            while(!input_values->position_4wd){
-                poll_buttons(input_values); // Keep polling the buttons to update the mode select and low range
-                poll_mode(input_values); // Keep polling the mode to update the position sensors
-            }
-            output_values->motor_direction = 0; // Disable the motor once the position is reached
-        break;
+        case LOW_RANGE:
+            output_values->target_mode = MODE_4WD;
+            break;
+        case HIGH_RANGE:
+            output_values->target_mode = input_values->mode_select; // This will be 0 for 2WD, 1 for AWD, and 2 for 4WD
+            break;
     }
 
+}
+
+void set_motor_speed(int speed){
+    /* This function can be used to set the motor speed using PWM if needed, for now we will just use full speed or no speed */
+
+}
+
+void set_motor_direction(int direction){
+    /* This function can be used to set the motor direction, for now we will just use forward, reverse, or stop */
+}
+
+void run_motor(){
+    /* This function can be used to run the motor based on the current outputs, for now we will just set the GPIO pins directly in the update_outputs function */
 }
 #endif

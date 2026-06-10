@@ -14,6 +14,7 @@
 int main(){
     inputs input_values = {0, 0, 0, 0, 0, 0, 0};
     outputs output_values = {0, 0, 50};
+    state current_state = {0, 0};
     watchdog_setup();
 
     while(1){

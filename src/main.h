@@ -75,7 +75,8 @@ typedef struct
 #define F4WDTAWD 7
 #define F4WDT4WD 8
 
-/* End STM Register Definitions */
+/* Definitions for default settings */
+#define DEFAULT_SPEED 50
 /* Begin Input/Output Structures */
 typedef struct
 {
@@ -118,6 +119,7 @@ void watchdog_setup();
 void poll_inputs(inputs *input_values);
 void update_outputs(inputs *input_values, outputs *output_values, state *current_states, volatile uint8_t *p_run_target);
 int gpio_init(void);
+void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *output_values);
 /* Begin Function Definitions */
 
 int gpio_init(void)
@@ -373,57 +375,101 @@ void set_motor_direction(int direction)
     /* This function can be used to set the motor direction, for now we will just use forward, reverse, or stop */
 }
 
-void run_motor(volatile uint8_t run_target, inputs *input_values)
+void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *output_values)
 {
     /* This function can be used to run the motor based on the current outputs */
-    switch(run_target){
-        case F2WDT2WD:
+    output_values->motor_speed = DEFAULT_SPEED; // default speed
+    switch (run_target)
+    {
+    case F2WDT2WD:
         /* From 2WD to 2WD */
         /* From 2WD to 2WD */
-        while(!(input_values->position_2wd)) poll_inputs(input_values);
+        output_values->motor_direction = 0; // stop
+        while (!(input_values->position_2wd))
+        {
+            poll_inputs(input_values);
+        }
         break;
 
-        case F2WDTAWD:
+    case F2WDTAWD:
         /*From 2WD to AWD */
         /* Run Forward, check for AWD Sensor */
-        while(!(input_values->position_awd)) poll_inputs(input_values);
+        output_values->motor_direction = 2; // forward
+        while (!(input_values->position_awd))
+        {
+            poll_inputs(input_values);
+        }
         break;
 
-        case F2WDT4WD:
+    case F2WDT4WD:
         /* From 2WD to 4WD */
-        while(!(input_values->position_4wd)) poll_inputs(input_values);
+        /* Run forward, check for 4WD sensor */
+        output_values->motor_direction = 2; // forward
+        while (!(input_values->position_4wd))
+        {
+            poll_inputs(input_values);
+        }
         break;
 
-        case FAWDT2WD:
+    case FAWDT2WD:
         /* From AWD to 2WD */
-        while(!(input_values->position_2wd)) poll_inputs(input_values);
+        /* Run backward, check for 2WD sensor */
+        output_values->motor_direction = 1; // reverse
+        while (!(input_values->position_2wd))
+        {
+            poll_inputs(input_values);
+        }
         break;
 
-        case FAWDTAWD:
+    case FAWDTAWD:
         /* From AWD to AWD */
-        while(!(input_values->position_awd)) poll_inputs(input_values);
+        output_values->motor_direction = 0; // stop
+        while (!(input_values->position_awd))
+        {
+            poll_inputs(input_values);
+        }
         break;
-        
-        case FAWDT4WD:
+
+    case FAWDT4WD:
         /* From AWD to 4WD */
-        while(!(input_values->position_4wd)) poll_inputs(input_values);
+        output_values->motor_direction = 2; // forward
+        while (!(input_values->position_4wd))
+        {
+            poll_inputs(input_values);
+        }
         break;
 
-        case F4WDT2WD:
+    case F4WDT2WD:
         /* From 4WD to 2WD */
-        while(!(input_values->position_2wd)) poll_inputs(input_values);
+        /* Run backward, check for 2wd sensor */
+        output_values->motor_direction = 1; // reverse
+        while (!(input_values->position_2wd))
+        {
+            poll_inputs(input_values);
+        }
         break;
 
-        case F4WDTAWD:
+    case F4WDTAWD:
         /* From 4WD to AWD */
-        while(!(input_values->position_awd)) poll_inputs(input_values);
+        /* Run backward, check for awd sensor */
+        output_values->motor_direction = 1; // reverse
+        while (!(input_values->position_awd))
+        {
+            poll_inputs(input_values);
+        }
         break;
 
-        case F4WDT4WD:
+    case F4WDT4WD:
         /* From 4WD to 4WD */
-        while(!(input_values->position_4wd)) poll_inputs(input_values);
+        output_values->motor_direction = 0; // stop
+        while (!(input_values->position_4wd))
+        {
+            poll_inputs(input_values);
+        }
         break;
     }
+    output_values->motor_direction = 0;
+    output_values->motor_speed = 0;
     machine_mode = POLL;
 }
 #endif

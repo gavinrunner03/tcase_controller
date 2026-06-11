@@ -28,7 +28,7 @@ int main(){
                 update_outputs(&input_values, &output_values, &current_state, &p_run_target);
                 break;
             case RUN:
-                run_motor(run_target, &input_values);
+                run_motor(run_target, &input_values, &output_values);
         }
     }
     return 0;

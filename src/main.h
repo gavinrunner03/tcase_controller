@@ -77,6 +77,9 @@ typedef struct
 
 /* Definitions for default settings */
 #define DEFAULT_SPEED 50
+#define REVERSE 1
+#define FORWARD 2
+#define OFF 0
 /* Begin Input/Output Structures */
 typedef struct
 {
@@ -120,6 +123,7 @@ void poll_inputs(inputs *input_values);
 void update_outputs(inputs *input_values, outputs *output_values, state *current_states, volatile uint8_t *p_run_target);
 int gpio_init(void);
 void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *output_values);
+void motor_ctrl(outputs *output_values);
 /* Begin Function Definitions */
 
 int gpio_init(void)
@@ -365,16 +369,6 @@ void update_outputs(inputs *input_values, outputs *output_values, state *current
     }
 }
 
-void set_motor_speed(int speed)
-{
-    /* This function can be used to set the motor speed using PWM if needed, for now we will just use full speed or no speed */
-}
-
-void set_motor_direction(int direction)
-{
-    /* This function can be used to set the motor direction, for now we will just use forward, reverse, or stop */
-}
-
 void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *output_values)
 {
     /* This function can be used to run the motor based on the current outputs */
@@ -384,9 +378,10 @@ void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *outpu
     case F2WDT2WD:
         /* From 2WD to 2WD */
         /* From 2WD to 2WD */
-        output_values->motor_direction = 0; // stop
+        output_values->motor_direction = OFF; // stop
         while (!(input_values->position_2wd))
         {
+            motor_ctrl(output_values);
             poll_inputs(input_values);
         }
         break;
@@ -394,9 +389,10 @@ void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *outpu
     case F2WDTAWD:
         /*From 2WD to AWD */
         /* Run Forward, check for AWD Sensor */
-        output_values->motor_direction = 2; // forward
+        output_values->motor_direction = FORWARD; // forward
         while (!(input_values->position_awd))
         {
+            motor_ctrl(output_values);
             poll_inputs(input_values);
         }
         break;
@@ -404,9 +400,10 @@ void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *outpu
     case F2WDT4WD:
         /* From 2WD to 4WD */
         /* Run forward, check for 4WD sensor */
-        output_values->motor_direction = 2; // forward
+        output_values->motor_direction = FORWARD; // forward
         while (!(input_values->position_4wd))
         {
+            motor_ctrl(output_values);
             poll_inputs(input_values);
         }
         break;
@@ -414,27 +411,30 @@ void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *outpu
     case FAWDT2WD:
         /* From AWD to 2WD */
         /* Run backward, check for 2WD sensor */
-        output_values->motor_direction = 1; // reverse
+        output_values->motor_direction = REVERSE; // reverse
         while (!(input_values->position_2wd))
         {
+            motor_ctrl(output_values);
             poll_inputs(input_values);
         }
         break;
 
     case FAWDTAWD:
         /* From AWD to AWD */
-        output_values->motor_direction = 0; // stop
+        output_values->motor_direction = OFF; // stop
         while (!(input_values->position_awd))
         {
+            motor_ctrl(output_values);
             poll_inputs(input_values);
         }
         break;
 
     case FAWDT4WD:
         /* From AWD to 4WD */
-        output_values->motor_direction = 2; // forward
+        output_values->motor_direction = FORWARD; // forward
         while (!(input_values->position_4wd))
         {
+            motor_ctrl(output_values);
             poll_inputs(input_values);
         }
         break;
@@ -442,9 +442,10 @@ void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *outpu
     case F4WDT2WD:
         /* From 4WD to 2WD */
         /* Run backward, check for 2wd sensor */
-        output_values->motor_direction = 1; // reverse
+        output_values->motor_direction = REVERSE; // reverse
         while (!(input_values->position_2wd))
         {
+            motor_ctrl(output_values);
             poll_inputs(input_values);
         }
         break;
@@ -452,24 +453,69 @@ void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *outpu
     case F4WDTAWD:
         /* From 4WD to AWD */
         /* Run backward, check for awd sensor */
-        output_values->motor_direction = 1; // reverse
+        output_values->motor_direction = REVERSE; // reverse
         while (!(input_values->position_awd))
-        {
+        {   
+            motor_ctrl(output_values);
             poll_inputs(input_values);
         }
         break;
 
     case F4WDT4WD:
         /* From 4WD to 4WD */
-        output_values->motor_direction = 0; // stop
+        output_values->motor_direction = OFF; // stop
         while (!(input_values->position_4wd))
         {
+            motor_ctrl(output_values);
             poll_inputs(input_values);
         }
+        
         break;
     }
-    output_values->motor_direction = 0;
-    output_values->motor_speed = 0;
+    output_values->motor_direction = OFF;
+    output_values->motor_speed = OFF;
+    motor_ctrl(output_values);
     machine_mode = POLL;
+}
+
+void motor_ctrl(outputs *output_values){
+    /* MOTOR GPIO CONTROL SET TO REFLECT THE OUTPUT VALUES STRUCT */
+        /*
+     *  PB5  | Motor Phase 1 Control
+     *  PA8  | Motor Phase 2 Control
+     *  PC6  | Global Chip Wakeup
+     */
+    if(output_values->motor_direction == OFF){
+        /* ALL OFF */
+        GPIOB->ODR &=~(0x1 << (5));
+        GPIOA->ODR &=~(0x1 << (8));
+        GPIOC->ODR &=~(0x1 << (6));
+    }
+    else if(output_values->motor_direction == REVERSE){
+        /* ALL OFF */
+        GPIOB->ODR &=~(0x1 << (5)); //P1
+        GPIOA->ODR &=~(0x1 <<(8)); //P2
+        GPIOC->ODR &=~(0x1 << (6)); //CHIP CTRL
+        /* REVERSE */
+        GPIOB->ODR |= (0x1 << (5)); //P1
+        GPIOA->ODR |= (0x0 << (8)); //P2
+        GPIOC->ODR |= (0x1 << (6)); //CTRL
+    }
+    else if(output_values->motor_direction == FORWARD){
+        /* ALL OFF */
+        GPIOB->ODR &=~(0x1 << (5)); //P1
+        GPIOA->ODR &=~(0x1 <<(8)); //P2
+        GPIOC->ODR &=~(0x1 << (6)); //CHIP CTRL
+        /* FORWARD */
+        GPIOB->ODR |= (0x0 << (5)); //P1
+        GPIOA->ODR |= (0x1 << (8)); //P2
+        GPIOC->ODR |= (0x1 << (6)); //CTRL
+    }
+    else{
+        /* ALL OFF */
+        GPIOB->ODR &=~(0x1 << (5)); //P1
+        GPIOA->ODR &=~(0x1 <<(8)); //P2
+        GPIOC->ODR &=~(0x1 << (6)); //CHIP CTRL
+    }
 }
 #endif

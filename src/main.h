@@ -120,7 +120,7 @@ volatile uint8_t *p_run_target = &run_target;
 /* Begin Function Prototypes */
 void watchdog_setup();
 void poll_inputs(inputs *input_values);
-void update_outputs(inputs *input_values, outputs *output_values, state *current_states, volatile uint8_t *p_run_target);
+void update_outputs(inputs *input_values, state *current_states, volatile uint8_t *p_run_target);
 int gpio_init(void);
 void run_motor(volatile uint8_t run_target, inputs *input_values, outputs *output_values);
 void motor_ctrl(outputs *output_values);
@@ -244,7 +244,7 @@ void poll_inputs(inputs *input_values)
     }
 }
 
-void update_outputs(inputs *input_values, outputs *output_values, state *current_states, volatile uint8_t *p_run_target)
+void update_outputs(inputs *input_values, state *current_states, volatile uint8_t *p_run_target)
 {
     /* The combinations:  Mode |             Condition                  | Output
                           2WD  | 4WD button OFF, Center Diff button OFF | 2WD Sensor HIGH

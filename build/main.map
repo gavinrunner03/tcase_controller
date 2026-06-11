@@ -1,0 +1,129 @@
+
+Discarded input sections
+
+ .group         0x00000000        0xc CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+ .group         0x00000000        0xc CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+ .group         0x00000000        0xc CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+ .text          0x00000000        0x0 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+ .data          0x00000000        0x0 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+ .bss           0x00000000        0x0 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+ .text.gpio_init
+                0x00000000      0x170 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+FLASH            0x08000000         0x00080000         xr
+RAM              0x20000000         0x00020000         xrw
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+LOAD CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.text           0x08000000      0x578
+                0x08000000                        . = ALIGN (0x4)
+ *(.text*)
+ .text.watchdog_setup
+                0x08000000        0xc CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                0x08000000                watchdog_setup
+ .text.poll_inputs
+                0x0800000c       0xd4 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                0x0800000c                poll_inputs
+ .text.update_outputs
+                0x080000e0      0x184 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                0x080000e0                update_outputs
+ .text.run_motor
+                0x08000264      0x17c CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                0x08000264                run_motor
+ .text.motor_ctrl
+                0x080003e0      0x10c CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                0x080003e0                motor_ctrl
+ .text.main     0x080004ec       0x8c CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                0x080004ec                main
+ *(.rodata*)
+                0x08000578                        . = ALIGN (0x4)
+
+.glue_7         0x08000578        0x0
+ .glue_7        0x08000578        0x0 linker stubs
+
+.glue_7t        0x08000578        0x0
+ .glue_7t       0x08000578        0x0 linker stubs
+
+.vfp11_veneer   0x08000578        0x0
+ .vfp11_veneer  0x08000578        0x0 linker stubs
+
+.v4_bx          0x08000578        0x0
+ .v4_bx         0x08000578        0x0 linker stubs
+
+.iplt           0x08000578        0x0
+ .iplt          0x08000578        0x0 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.rel.dyn        0x08000578        0x0
+ .rel.iplt      0x08000578        0x0 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.data           0x20000000        0x4 load address 0x08000578
+                0x20000000                        . = ALIGN (0x4)
+ *(.data*)
+ .data.p_run_target
+                0x20000000        0x4 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                0x20000000                p_run_target
+                0x20000004                        . = ALIGN (0x4)
+
+.igot.plt       0x20000004        0x0 load address 0x0800057c
+ .igot.plt      0x20000004        0x0 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.bss            0x20000004        0x4 load address 0x0800057c
+                0x20000004                        . = ALIGN (0x4)
+ *(.bss*)
+ .bss.machine_mode
+                0x20000004        0x1 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                0x20000004                machine_mode
+ .bss.run_target
+                0x20000005        0x1 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                0x20000005                run_target
+ *(COMMON)
+                0x20000008                        . = ALIGN (0x4)
+ *fill*         0x20000006        0x2 
+OUTPUT(main.elf elf32-littlearm)
+LOAD linker stubs
+
+.debug_info     0x00000000      0x416
+ .debug_info    0x00000000      0x416 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.debug_abbrev   0x00000000      0x17f
+ .debug_abbrev  0x00000000      0x17f CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.debug_aranges  0x00000000       0x50
+ .debug_aranges
+                0x00000000       0x50 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.debug_rnglists
+                0x00000000       0x3d
+ .debug_rnglists
+                0x00000000       0x3d CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.debug_macro    0x00000000      0xefb
+ .debug_macro   0x00000000       0x29 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+ .debug_macro   0x00000029      0xaba CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+ .debug_macro   0x00000ae3      0x34e CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+ .debug_macro   0x00000e31       0xca CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.debug_line     0x00000000      0x472
+ .debug_line    0x00000000      0x472 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.debug_str      0x00000000     0x3ba8
+ .debug_str     0x00000000     0x3ba8 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                               0x3d30 (size before relaxing)
+
+.comment        0x00000000       0x26
+ .comment       0x00000000       0x26 CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+                                 0x27 (size before relaxing)
+
+.ARM.attributes
+                0x00000000       0x2e
+ .ARM.attributes
+                0x00000000       0x2e CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o
+
+.debug_frame    0x00000000      0x10c
+ .debug_frame   0x00000000      0x10c CMakeFiles/main.elf.dir/home/gavin/tcase_controller/src/main.c.o

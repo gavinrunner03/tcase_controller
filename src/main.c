@@ -11,21 +11,21 @@
 */
 
 extern volatile uint8_t machine_mode;
-extern volatile uint8_t *run_target;
+extern volatile uint8_t run_target;
 extern volatile uint8_t *p_run_targe;
 int main(){
     machine_mode = 0;
     run_target = 0;
     inputs input_values = {0, 0, 0, 0, 0, 0, 0};
-    outputs output_values = {0, 0, 50};
+    outputs output_values = {0};
     state current_state = {0, 0};
     watchdog_setup();
 
     while(1){
         switch(machine_mode){
             case POLL:
-                poll_mode(&input_values);
-                update_outputs(&input_values, &output_values, &current_state, &p_run_target);
+                poll_inputs(&input_values);
+                update_outputs(&input_values, &current_state, p_run_target);
                 break;
             case RUN:
                 run_motor(run_target, &input_values, &output_values);

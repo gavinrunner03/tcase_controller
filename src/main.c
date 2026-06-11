@@ -10,18 +10,26 @@
 * sensor, this allows the controller moduule to know when to stop the motor, and also to know which mode is currently engaged.
 */
 
-
+extern volatile uint8_t machine_mode;
+extern volatile uint8_t *run_target;
+extern volatile uint8_t *p_run_targe;
 int main(){
+    machine_mode = 0;
+    run_target = 0;
     inputs input_values = {0, 0, 0, 0, 0, 0, 0};
     outputs output_values = {0, 0, 50};
     state current_state = {0, 0};
     watchdog_setup();
 
     while(1){
-        poll_buttons(&input_values);
-        poll_mode(&input_values);
-        
-        update_outputs(&input_values, &output_values);
+        switch(machine_mode){
+            case POLL:
+                poll_mode(&input_values);
+                update_outputs(&input_values, &output_values, &current_state, &p_run_target);
+                break;
+            case RUN:
+                run_motor(run_target, &input_values);
+        }
     }
     return 0;
 }

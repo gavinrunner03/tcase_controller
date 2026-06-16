@@ -3,18 +3,14 @@
 extern volatile uint8_t machine_mode;
 extern volatile uint8_t run_target;
 extern volatile uint8_t *p_run_target;
-
+extern volatile uint8_t position_4WD_confirmed;        /*PC13*/
+extern volatile uint8_t position_LO_confirmed;         /*PC14*/
 int main(void)
 {
     HAL_Init();
 
     SystemClock_Config();
 
-    /*
-     * Optional.
-     * HAL_Init() usually already does this,
-     * but calling your own init makes it explicit.
-     */
     SysTick_1ms_Init();
 
     MX_USART2_UART_Init();
@@ -46,3 +42,5 @@ void SysTick_Handler(void)
 {
     HAL_IncTick();
 }
+
+void 

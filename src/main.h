@@ -72,7 +72,8 @@ typedef struct
 volatile uint8_t machine_mode;
 volatile uint8_t run_target;
 volatile uint8_t *p_run_target = &run_target;
-
+volatile uint8_t position_4WD_confirmed;        /*PC13*/
+volatile uint8_t position_LO_confirmed;         /*PC14*/
 /* Begin Function Prototypes */
 void watchdog_setup();
 void poll_inputs(inputs *input_values);

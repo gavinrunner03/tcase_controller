@@ -2,7 +2,7 @@
 
 extern volatile uint8_t machine_mode;
 extern volatile uint8_t run_target;
-extern volatile uint8_t *p_run_targe;
+extern volatile uint8_t *p_run_target;
 
 int main(void)
 {
@@ -18,7 +18,7 @@ int main(void)
     SysTick_1ms_Init();
 
     MX_USART2_UART_Init();
-
+    gpio_init();
     HAL_Delay(1000);
 
     machine_mode = 0;

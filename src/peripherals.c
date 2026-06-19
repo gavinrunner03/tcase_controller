@@ -35,14 +35,6 @@ void MX_USART2_UART_Init(void)
     HAL_UART_Init(&huart2);
 }
 
-void SystemClock_Config(void)
-{
-    /*
-     * Empty for now.
-     * This means the chip stays on default HSI clock.
-     */
-}
-
 void SysTick_1ms_Init(void)
 {
     /*

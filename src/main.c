@@ -6,6 +6,8 @@ static volatile uint8_t PC13_DEBOUNCE_PENDING = 0;
 static volatile uint32_t PC13_LAST_EDGE_MS = 0;
 
 static volatile uint8_t PC13_STABLE_STATE = 1; /* 1 = released, 0 = pressed */
+static volatile uint16_t DEBUG_BTN_COUNT = 2;  /* for debug modulo 3 state button select */
+static volatile uint16_t last_debug_btn_count = 2;
 static volatile uint32_t g_msticks = 0;
 int main(void)
 {
@@ -27,6 +29,39 @@ int main(void)
     while (1)
     {
         PC13_press_routine(); /* Check if PC13 is pressed, do somoe stuff, and reset it */
+        if (last_debug_btn_count != DEBUG_BTN_COUNT)
+        {
+            last_debug_btn_count = DEBUG_BTN_COUNT;
+            switch (DEBUG_BTN_COUNT % 3)
+            {
+            case 0:
+#ifdef DEBUG_MAIN
+                printf("[SHIFT] Shifting from %d to %d\r\n", motor_target_position, MODE_2WD);
+#endif
+                shift_position(motor_target_position, MODE_2WD);
+                break;
+
+            case 1:
+#ifdef DEBUG_MAIN
+                printf("[SHIFT] Shifting from %d to %d\r\n", motor_target_position, MODE_4X4);
+#endif
+                shift_position(motor_target_position, MODE_4X4);
+                break;
+
+            case 2:
+#ifdef DEBUG_MAIN
+                printf("[SHIFT] Shifting from %d to %d\r\n", motor_target_position, MODE_AWD);
+#endif
+                shift_position(motor_target_position, MODE_AWD);
+                break;
+
+            default:
+#ifdef DEBUG_MAIN
+                printf("[ERROR] EMERGENCY SHIFT TO 2WD | %d to %d\r\n", motor_target_position, MODE_2WD);
+#endif
+                break;
+            }
+        }
     }
     return 0;
 }
@@ -42,31 +77,35 @@ void SysTick_Handler(void)
      */
 
     /* 6 Pin Connector Polling */
-    if ((!(GPIOC->IDR & (GPIO_PIN_3))) && (GPIOC->IDR & (GPIO_PIN_6)))
+    if ((!(GPIOC->IDR & (GPIO_PIN_1))) && (GPIOC->IDR & (GPIO_PIN_3)))
     {
         /*
-         * if ONLY P3 is active (low) then the target mode is the AWD position, only
+         * if ONLY P3(PC1) is active (low) AND NOT P6(PC3) then the target mode is the AWD position, only
          * P6 is relavent for error checking because it has an overlap with 4x4 Locked mode.
          */
         motor_target_position = MODE_AWD;
     }
-    else if ((!(GPIOC->IDR & (GPIO_PIN_3))) && (!(GPIOC->IDR & (GPIO_PIN_6))))
+    else if ((!(GPIOC->IDR & (GPIO_PIN_1))) && (!(GPIOC->IDR & (GPIO_PIN_3))))
     {
         /*
-         * If P3 AND P6 are both active low then the target mode is the 4x4 locked position.
+         * If P3(PC1) AND P6(PC3) are both active low then the target mode is the 4x4 locked position.
          * Other pins are irrelavent because there is no overlap in mode selection
          */
 
         motor_target_position = MODE_4X4;
     }
-    else if ((!(GPIOC->IDR & (GPIO_PIN_4))) && (!(GPIOC->IDR & (GPIO_PIN_5))) && (!(GPIOC->IDR & (GPIO_PIN_6))))
+    else if ((!(GPIOC->IDR & (GPIO_PIN_2))) && (!(GPIOC->IDR & (GPIO_PIN_3))))
     {
         /*
-         * If P4, P5, and P6 are active then the target mode is the 2WD position
+         * If P5(PC2), and P6(PC3) are active then the target mode is the 2WD position
          * P3 is not relavent here, and there are no other modes that use 4 5 and 6 so other pin checks
          * are irrelavent
          */
-        motor_target_position = MODE_AWD;
+        motor_target_position = MODE_2WD;
+    }
+    else
+    {
+        motor_target_position = UNKNOWN;
     }
 }
 
@@ -85,6 +124,7 @@ void gpio_c_pins_init()
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_SYSCFG_CLK_ENABLE();
 
     GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -110,7 +150,6 @@ void gpio_c_pins_init()
     HAL_NVIC_SetPriority(EXTI15_10_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
-
 
 void gpio_b_pins_init()
 {
@@ -177,6 +216,7 @@ void PC13_press_routine(void)
             if ((pc13_now == 0) && (PC13_STABLE_STATE == 1))
             {
                 PC13_STABLE_STATE = 0;
+                DEBUG_BTN_COUNT++;
                 printf("Button Pressed\r\n");
             }
 
@@ -208,4 +248,108 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         PC13_LAST_EDGE_MS = HAL_GetTick();
         PC13_DEBOUNCE_PENDING = 1;
     }
+}
+
+void shift_position(uint8_t current_target, uint8_t new_target)
+{
+    uint32_t start_time = HAL_GetTick();
+    if (current_target == new_target)
+    {
+        GPIOB->ODR &= ~(FORWARD | BACKWARD); /* Do not move */
+    }
+    else if ((current_target == MODE_AWD) && (new_target == MODE_4X4))
+    {
+        while ((motor_target_position != new_target) &&
+               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
+        {
+            GPIOB->ODR &= ~(FORWARD | BACKWARD);
+            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
+            GPIOB->ODR |= BACKWARD;
+        }
+    }
+    else if ((current_target == MODE_AWD) && (new_target == MODE_2WD))
+    {
+        while ((motor_target_position != new_target) &&
+               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_CROSS_MS))
+        {
+            GPIOB->ODR &= ~(FORWARD | BACKWARD);
+            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
+            GPIOB->ODR |= BACKWARD;
+        }
+    }
+    else if ((current_target == MODE_4X4) && (new_target == MODE_AWD))
+    {
+        while ((motor_target_position != new_target) &&
+               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
+        {
+            GPIOB->ODR &= ~(FORWARD | BACKWARD);
+            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
+            GPIOB->ODR |= FORWARD;
+        }
+    }
+    else if ((current_target == MODE_4X4) && (new_target == MODE_2WD))
+    {
+        while ((motor_target_position != new_target) &&
+               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
+        {
+            GPIOB->ODR &= ~(FORWARD | BACKWARD);
+            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
+            GPIOB->ODR |= BACKWARD;
+        }
+    }
+    else if ((current_target == MODE_2WD) && (new_target == MODE_AWD))
+    {
+        while ((motor_target_position != new_target) &&
+               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_CROSS_MS))
+        {
+            GPIOB->ODR &= ~(FORWARD | BACKWARD);
+            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
+            GPIOB->ODR |= FORWARD;
+        }
+    }
+    else if ((current_target == MODE_2WD) && (new_target == MODE_4X4))
+    {
+        while ((motor_target_position != new_target) &&
+               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
+        {
+            GPIOB->ODR &= ~(FORWARD | BACKWARD);
+            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
+            GPIOB->ODR |= FORWARD;
+        }
+    }
+    else if (current_target == UNKNOWN)
+    {
+        while ((motor_target_position != MODE_2WD) &&
+               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
+        {
+            /*
+             * MODE_2WDis as far back as it goes, run shortest timeout in hopes that
+             * we will recover before stalling, and if we do stall we dont burn up the motor
+             */
+            GPIOB->ODR &= ~(FORWARD | BACKWARD);
+            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
+            GPIOB->ODR |= BACKWARD;
+        }
+    }
+
+    GPIOB->ODR &= ~(FORWARD | BACKWARD);  /* Stop motor after shift */
+    GPIOB->ODR &= ~(ENABLE_U | ENABLE_V); /* Disable bridge */
+#ifdef DEBUG_MAIN
+    if (motor_target_position == MODE_2WD && current_target == UNKNOWN)
+    {
+        printf("[RECOVERY] Unknown state recovered to 2WD\r\n");
+    }
+    else if (motor_target_position != new_target)
+    {
+        printf("[FAULT] Shift failed or timed out. Current=%d Target=%d\r\n",
+               motor_target_position,
+               new_target);
+    }
+    else
+    {
+        printf("[SHIFT] Complete. Current=%d Target=%d\r\n",
+               motor_target_position,
+               new_target);
+    }
+#endif
 }

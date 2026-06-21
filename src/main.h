@@ -23,9 +23,11 @@
 #define ENABLE_V ((uint16_t) 0x1 << 15)  /* 1 << 15 INH_V */
 
 /* Timeout Definition */
-#define SHIFT_TIMEOUT_ADJACENT_MS  1500U /* Timout for any adjacent manuevre */
-#define SHIFT_TIMEOUT_CROSS_MS     3000U /* Timout for any manuevre that goes across 4x4 locked (center, larger area)*/
-
+#define SHIFT_TIMEOUT_ADJACENT_MS  2000U /* Timout for any adjacent manuevre */
+#define SHIFT_TIMEOUT_CROSS_MS     4000U /* Timout for any manuevre that goes across 4x4 locked (center, larger area)*/
+#define SHIFT_OVERTRAVEL_AWD_MS  200
+#define SHIFT_OVERTRAVEL_2WD_MS  600
+#define SHIFT_OVERTRAVEL_4X4_MS  0U
 /* Function Prototypes */
 
 void gpio_c_pins_init();

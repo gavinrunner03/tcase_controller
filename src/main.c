@@ -70,37 +70,28 @@ void SysTick_Handler(void)
 {
     HAL_IncTick();
     g_msticks++;
-    /* Keep systick simple, just scan input registers and set the global position stage
-     * position is the variable containing the state of the target position, ie the motor
-     * has spun to this position, but it is not confirmable yet until we read feedback from the
-     * other inputs. Not to be confused with the user_target_position!
-     */
 
-    /* 6 Pin Connector Polling */
-    if ((!(GPIOC->IDR & (GPIO_PIN_1))) && (GPIOC->IDR & (GPIO_PIN_3)))
+    uint8_t p3_active = ((GPIOC->IDR & GPIO_PIN_1) == 0);
+    uint8_t p5_active = ((GPIOC->IDR & GPIO_PIN_2) == 0);
+    uint8_t p6_active = ((GPIOC->IDR & GPIO_PIN_3) == 0);
+
+    /*
+     * Exact valid sensor patterns:
+     *
+     * P3 only      = AWD
+     * P3 + P6 only = 4X4
+     * P5 + P6 only = 2WD
+     */
+    if ((p3_active) && (!p5_active) && (!p6_active))
     {
-        /*
-         * if ONLY P3(PC1) is active (low) AND NOT P6(PC3) then the target mode is the AWD position, only
-         * P6 is relavent for error checking because it has an overlap with 4x4 Locked mode.
-         */
         motor_target_position = MODE_AWD;
     }
-    else if ((!(GPIOC->IDR & (GPIO_PIN_1))) && (!(GPIOC->IDR & (GPIO_PIN_3))))
+    else if ((p3_active) && (!p5_active) && (p6_active))
     {
-        /*
-         * If P3(PC1) AND P6(PC3) are both active low then the target mode is the 4x4 locked position.
-         * Other pins are irrelavent because there is no overlap in mode selection
-         */
-
         motor_target_position = MODE_4X4;
     }
-    else if ((!(GPIOC->IDR & (GPIO_PIN_2))) && (!(GPIOC->IDR & (GPIO_PIN_3))))
+    else if ((!p3_active) && (p5_active) && (p6_active))
     {
-        /*
-         * If P5(PC2), and P6(PC3) are active then the target mode is the 2WD position
-         * P3 is not relavent here, and there are no other modes that use 4 5 and 6 so other pin checks
-         * are irrelavent
-         */
         motor_target_position = MODE_2WD;
     }
     else
@@ -253,93 +244,98 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 void shift_position(uint8_t current_target, uint8_t new_target)
 {
     uint32_t start_time = HAL_GetTick();
+    uint32_t timeout_ms = SHIFT_TIMEOUT_ADJACENT_MS;
+    uint32_t overtravel_ms = 0U;
+    uint16_t direction = 0U;
+
     if (current_target == new_target)
     {
-        GPIOB->ODR &= ~(FORWARD | BACKWARD); /* Do not move */
+        GPIOB->ODR &= ~(FORWARD | BACKWARD);
+        GPIOB->ODR &= ~(ENABLE_U | ENABLE_V);
+        return;
     }
-    else if ((current_target == MODE_AWD) && (new_target == MODE_4X4))
+
+    if ((current_target == MODE_AWD) && (new_target == MODE_4X4))
     {
-        while ((motor_target_position != new_target) &&
-               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
-        {
-            GPIOB->ODR &= ~(FORWARD | BACKWARD);
-            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
-            GPIOB->ODR |= BACKWARD;
-        }
+        direction = BACKWARD;
+        timeout_ms = SHIFT_TIMEOUT_ADJACENT_MS;
     }
     else if ((current_target == MODE_AWD) && (new_target == MODE_2WD))
     {
-        while ((motor_target_position != new_target) &&
-               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_CROSS_MS))
-        {
-            GPIOB->ODR &= ~(FORWARD | BACKWARD);
-            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
-            GPIOB->ODR |= BACKWARD;
-        }
+        direction = BACKWARD;
+        timeout_ms = SHIFT_TIMEOUT_CROSS_MS;
     }
     else if ((current_target == MODE_4X4) && (new_target == MODE_AWD))
     {
-        while ((motor_target_position != new_target) &&
-               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
-        {
-            GPIOB->ODR &= ~(FORWARD | BACKWARD);
-            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
-            GPIOB->ODR |= FORWARD;
-        }
+        direction = FORWARD;
+        timeout_ms = SHIFT_TIMEOUT_ADJACENT_MS;
     }
     else if ((current_target == MODE_4X4) && (new_target == MODE_2WD))
     {
-        while ((motor_target_position != new_target) &&
-               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
-        {
-            GPIOB->ODR &= ~(FORWARD | BACKWARD);
-            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
-            GPIOB->ODR |= BACKWARD;
-        }
+        direction = BACKWARD;
+        timeout_ms = SHIFT_TIMEOUT_ADJACENT_MS;
     }
     else if ((current_target == MODE_2WD) && (new_target == MODE_AWD))
     {
-        while ((motor_target_position != new_target) &&
-               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_CROSS_MS))
-        {
-            GPIOB->ODR &= ~(FORWARD | BACKWARD);
-            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
-            GPIOB->ODR |= FORWARD;
-        }
+        direction = FORWARD;
+        timeout_ms = SHIFT_TIMEOUT_CROSS_MS;
     }
     else if ((current_target == MODE_2WD) && (new_target == MODE_4X4))
     {
-        while ((motor_target_position != new_target) &&
-               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
-        {
-            GPIOB->ODR &= ~(FORWARD | BACKWARD);
-            GPIOB->ODR |= (ENABLE_U | ENABLE_V);
-            GPIOB->ODR |= FORWARD;
-        }
+        direction = FORWARD;
+        timeout_ms = SHIFT_TIMEOUT_ADJACENT_MS;
     }
     else if (current_target == UNKNOWN)
     {
-        while ((motor_target_position != MODE_2WD) &&
-               ((HAL_GetTick() - start_time) < SHIFT_TIMEOUT_ADJACENT_MS))
+        direction = BACKWARD;
+        new_target = MODE_2WD;
+        timeout_ms = SHIFT_TIMEOUT_ADJACENT_MS;
+    }
+    else
+    {
+        GPIOB->ODR &= ~(FORWARD | BACKWARD);
+        GPIOB->ODR &= ~(ENABLE_U | ENABLE_V);
+        return;
+    }
+
+    while ((motor_target_position != new_target) &&
+           ((HAL_GetTick() - start_time) < timeout_ms))
+    {
+        GPIOB->ODR &= ~(FORWARD | BACKWARD);
+        GPIOB->ODR |= (ENABLE_U | ENABLE_V);
+        GPIOB->ODR |= direction;
+    }
+
+    if (motor_target_position == new_target)
+    {
+        if (new_target == MODE_AWD)
         {
-            /*
-             * MODE_2WDis as far back as it goes, run shortest timeout in hopes that
-             * we will recover before stalling, and if we do stall we dont burn up the motor
-             */
+            overtravel_ms = SHIFT_OVERTRAVEL_AWD_MS;
+        }
+        else if (new_target == MODE_2WD)
+        {
+            overtravel_ms = SHIFT_OVERTRAVEL_2WD_MS;
+        }
+        else
+        {
+            overtravel_ms = SHIFT_OVERTRAVEL_4X4_MS;
+        }
+
+        start_time = HAL_GetTick();
+
+        while ((HAL_GetTick() - start_time) < overtravel_ms)
+        {
             GPIOB->ODR &= ~(FORWARD | BACKWARD);
             GPIOB->ODR |= (ENABLE_U | ENABLE_V);
-            GPIOB->ODR |= BACKWARD;
+            GPIOB->ODR |= direction;
         }
     }
 
-    GPIOB->ODR &= ~(FORWARD | BACKWARD);  /* Stop motor after shift */
-    GPIOB->ODR &= ~(ENABLE_U | ENABLE_V); /* Disable bridge */
+    GPIOB->ODR &= ~(FORWARD | BACKWARD);
+    GPIOB->ODR &= ~(ENABLE_U | ENABLE_V);
+
 #ifdef DEBUG_MAIN
-    if (motor_target_position == MODE_2WD && current_target == UNKNOWN)
-    {
-        printf("[RECOVERY] Unknown state recovered to 2WD\r\n");
-    }
-    else if (motor_target_position != new_target)
+    if (motor_target_position != new_target)
     {
         printf("[FAULT] Shift failed or timed out. Current=%d Target=%d\r\n",
                motor_target_position,

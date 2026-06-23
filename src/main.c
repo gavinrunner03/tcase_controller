@@ -6,8 +6,17 @@ static volatile uint8_t PC13_DEBOUNCE_PENDING = 0;
 static volatile uint32_t PC13_LAST_EDGE_MS = 0;
 
 static volatile uint8_t PC13_STABLE_STATE = 1; /* 1 = released, 0 = pressed */
-static volatile uint16_t DEBUG_BTN_COUNT = 2;  /* for debug modulo 3 state button select */
+
+/* PC4 debounce */
+static volatile uint8_t PC4_DEBOUNCE_PENDING = 0;
+static volatile uint32_t PC4_LAST_EDGE_MS = 0;
+
+static volatile uint8_t PC4_STABLE_STATE = 1; /* 1 = released, 0 = pressed */
+
+static volatile uint16_t DEBUG_BTN_COUNT = 2; /* for debug modulo 3 state button select */
 static volatile uint16_t last_debug_btn_count = 2;
+static volatile uint16_t last_pc4_btn_count = 2;
+static volatile uint16_t PC4_BTN_COUNT = 0;
 static volatile uint32_t g_msticks = 0;
 int main(void)
 {
@@ -28,42 +37,75 @@ int main(void)
 #endif
     while (1)
     {
-        PC13_press_routine(); /* Check if PC13 is pressed, do somoe stuff, and reset it */
+        PC13_press_routine();
+        PC4_press_routine();
+
+        if (last_pc4_btn_count != PC4_BTN_COUNT)
+        {
+            last_pc4_btn_count = PC4_BTN_COUNT;
+
+            printf("Stable 4WD Button state: %d\r\n", PC4_STABLE_STATE);
+
+            if (PC4_STABLE_STATE == 0)
+            {
+                /*
+                 * 4WD toggle/button turned ON.
+                 * Go to AWD first.
+                 */
+                printf("Attempting AWD\r\n");
+                shift_position(motor_target_position, MODE_AWD);
+            }
+            else
+            {
+                /*
+                 * 4WD toggle/button turned OFF.
+                 * Return to 2WD.
+                 */
+                printf("Attempting 2WD\r\n");
+                shift_position(motor_target_position, MODE_2WD);
+            }
+        }
+
         if (last_debug_btn_count != DEBUG_BTN_COUNT)
         {
             last_debug_btn_count = DEBUG_BTN_COUNT;
-            switch (DEBUG_BTN_COUNT % 3)
+
+            printf("Stable DEBUG Button state: %d\r\n", PC13_STABLE_STATE);
+
+            if (PC13_STABLE_STATE == 0)
             {
-            case 0:
-#ifdef DEBUG_MAIN
-                printf("[SHIFT] Shifting from %d to %d\r\n", motor_target_position, MODE_2WD);
-#endif
-                shift_position(motor_target_position, MODE_2WD);
-                break;
-
-            case 1:
-#ifdef DEBUG_MAIN
-                printf("[SHIFT] Shifting from %d to %d\r\n", motor_target_position, MODE_4X4);
-#endif
-                shift_position(motor_target_position, MODE_4X4);
-                break;
-
-            case 2:
-#ifdef DEBUG_MAIN
-                printf("[SHIFT] Shifting from %d to %d\r\n", motor_target_position, MODE_AWD);
-#endif
-                shift_position(motor_target_position, MODE_AWD);
-                break;
-
-            default:
-#ifdef DEBUG_MAIN
-                printf("[ERROR] EMERGENCY SHIFT TO 2WD | %d to %d\r\n", motor_target_position, MODE_2WD);
-#endif
-                break;
+                /*
+                 * Diff lock button pressed.
+                 * Only lock if 4WD is ON and current position is AWD.
+                 */
+                if ((PC4_STABLE_STATE == 0) && (motor_target_position == MODE_AWD))
+                {
+                    printf("Attempting Center Differential Lock\r\n");
+                    shift_position(motor_target_position, MODE_4X4);
+                }
+                else
+                {
+                    printf("Center Diff Lock Button Press Ignored, AWD pre-state not met\r\n");
+                }
+            }
+            else
+            {
+                /*
+                 * Diff lock button released.
+                 * If 4WD is still ON and we are locked, unlock back to AWD.
+                 */
+                if ((PC4_STABLE_STATE == 0) && (motor_target_position == MODE_4X4))
+                {
+                    printf("Attempting Center Differential Un-Lock\r\n");
+                    shift_position(motor_target_position, MODE_AWD);
+                }
+                else
+                {
+                    printf("Center Diff Unlock Ignored\r\n");
+                }
             }
         }
     }
-    return 0;
 }
 
 void SysTick_Handler(void)
@@ -75,13 +117,6 @@ void SysTick_Handler(void)
     uint8_t p5_active = ((GPIOC->IDR & GPIO_PIN_2) == 0);
     uint8_t p6_active = ((GPIOC->IDR & GPIO_PIN_3) == 0);
 
-    /*
-     * Exact valid sensor patterns:
-     *
-     * P3 only      = AWD
-     * P3 + P6 only = 4X4
-     * P5 + P6 only = 2WD
-     */
     if ((p3_active) && (!p5_active) && (!p6_active))
     {
         motor_target_position = MODE_AWD;
@@ -117,13 +152,23 @@ void gpio_c_pins_init()
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_SYSCFG_CLK_ENABLE();
 
-    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6;
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_5 | GPIO_PIN_6;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
+    /*
+     * PC4 4WD button
+     * Interrupt on rising and falling edge.
+     */
+    GPIO_InitStruct.Pin = GPIO_PIN_4;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
     /*
      * PC13 blue onboard debug button
      * Interrupt on rising and falling edge.
@@ -134,6 +179,12 @@ void gpio_c_pins_init()
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    /*
+     * PC4 is on EXTI line 4.
+     */
+    HAL_NVIC_SetPriority(EXTI4_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(EXTI4_IRQn);
 
     /*
      * PC13 is on EXTI line 13, which uses EXTI15_10_IRQn.
@@ -176,6 +227,53 @@ void gpio_b_pins_init()
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 }
 
+void PC4_press_routine(void)
+{
+    uint8_t pc4_now;
+
+    if (PC4_DEBOUNCE_PENDING)
+    {
+        if ((HAL_GetTick() - PC4_LAST_EDGE_MS) >= 50U)
+        {
+            PC4_DEBOUNCE_PENDING = 0;
+
+            /*
+             * PC4 active low:
+             * 0 = pressed
+             * 1 = released
+             */
+            if (GPIOC->IDR & GPIO_PIN_4)
+            {
+                pc4_now = 1;
+            }
+            else
+            {
+                pc4_now = 0;
+            }
+
+            /*
+             * Count every stable state change.
+             * Press counts once.
+             * Release counts once.
+             */
+            if (pc4_now != PC4_STABLE_STATE)
+            {
+                PC4_STABLE_STATE = pc4_now;
+                PC4_BTN_COUNT++;
+
+                if (PC4_STABLE_STATE == 0)
+                {
+                    printf("PC4 Button Pressed\r\n");
+                }
+                else
+                {
+                    printf("PC4 Button Released\r\n");
+                }
+            }
+        }
+    }
+}
+
 void PC13_press_routine(void)
 {
     uint8_t pc13_now;
@@ -201,26 +299,31 @@ void PC13_press_routine(void)
             }
 
             /*
-             * New stable press.
-             * Only print if previous stable state was released.
+             * Count every stable state change.
+             * Press counts once.
+             * Release counts once.
              */
-            if ((pc13_now == 0) && (PC13_STABLE_STATE == 1))
+            if (pc13_now != PC13_STABLE_STATE)
             {
-                PC13_STABLE_STATE = 0;
+                PC13_STABLE_STATE = pc13_now;
                 DEBUG_BTN_COUNT++;
-                printf("Button Pressed\r\n");
-            }
 
-            /*
-             * Stable release.
-             * Unlock for the next press.
-             */
-            else if (pc13_now == 1)
-            {
-                PC13_STABLE_STATE = 1;
+                if (PC13_STABLE_STATE == 0)
+                {
+                    printf("PC13 Button Pressed\r\n");
+                }
+                else
+                {
+                    printf("PC13 Button Released\r\n");
+                }
             }
         }
     }
+}
+
+void EXTI4_IRQHandler(void)
+{
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_4);
 }
 
 void EXTI15_10_IRQHandler(void)
@@ -238,6 +341,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
          */
         PC13_LAST_EDGE_MS = HAL_GetTick();
         PC13_DEBOUNCE_PENDING = 1;
+    }
+    else if (GPIO_Pin == GPIO_PIN_4)
+    {
+        /*
+         * Every bounce edge restarts the debounce timer.
+         * Do not print in here.
+         */
+        PC4_LAST_EDGE_MS = HAL_GetTick();
+        PC4_DEBOUNCE_PENDING = 1;
     }
 }
 

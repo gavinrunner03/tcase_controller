@@ -28,6 +28,7 @@
 #define SHIFT_OVERTRAVEL_AWD_MS  200
 #define SHIFT_OVERTRAVEL_2WD_MS  600
 #define SHIFT_OVERTRAVEL_4X4_MS  0U
+
 /* Function Prototypes */
 
 void gpio_c_pins_init();
@@ -44,6 +45,8 @@ void watchdog_setup();
 
 void PC13_press_routine();
 /* Debug button routine for debouncing */
+void PC4_press_routine();
+/* 2WD button routine for debouncing */
 
 void shift_position(uint8_t current_target, uint8_t new_target);
 /* Shift position/motor driver logic */

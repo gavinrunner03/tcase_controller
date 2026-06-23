@@ -13,9 +13,9 @@ static volatile uint32_t PC4_LAST_EDGE_MS = 0;
 
 static volatile uint8_t PC4_STABLE_STATE = 1; /* 1 = released, 0 = pressed */
 
-static volatile uint16_t DEBUG_BTN_COUNT = 2; /* for debug modulo 3 state button select */
-static volatile uint16_t last_debug_btn_count = 2;
-static volatile uint16_t last_pc4_btn_count = 2;
+static volatile uint16_t DEBUG_BTN_COUNT = 0; /* for debug modulo 3 state button select */
+static volatile uint16_t last_debug_btn_count = 0;
+static volatile uint16_t last_pc4_btn_count = 0;
 static volatile uint16_t PC4_BTN_COUNT = 0;
 static volatile uint32_t g_msticks = 0;
 int main(void)
@@ -32,6 +32,8 @@ int main(void)
     printf("GPIOB Outputs Initialized\r\n");
 #endif
     HAL_Delay(1000); /* Wait 1 second for everything to stabilize*/
+    PC4_STABLE_STATE = (GPIOC->IDR & (1U<<4)) >> 4; /* Check current pin state at boot */
+    PC13_STABLE_STATE = (GPIOC->IDR & (1U<<13)) >> 13; /* Check current pin state at boot */
 #ifdef DEBUG_MAIN
     printf("Boot Successful\r\n");
 #endif
@@ -40,70 +42,54 @@ int main(void)
         PC13_press_routine();
         PC4_press_routine();
 
-        if (last_pc4_btn_count != PC4_BTN_COUNT)
+        if (!PC4_STABLE_STATE)
         {
-            last_pc4_btn_count = PC4_BTN_COUNT;
-
-            printf("Stable 4WD Button state: %d\r\n", PC4_STABLE_STATE);
-
-            if (PC4_STABLE_STATE == 0)
+            if (last_pc4_btn_count != PC4_BTN_COUNT)
             {
-                /*
-                 * 4WD toggle/button turned ON.
-                 * Go to AWD first.
-                 */
+                last_pc4_btn_count = PC4_BTN_COUNT;
+
+                printf("Stable 4WD Button state: %d\r\n", PC4_STABLE_STATE);
+
                 printf("Attempting AWD\r\n");
                 shift_position(motor_target_position, MODE_AWD);
             }
-            else
+
+            if (last_debug_btn_count != DEBUG_BTN_COUNT)
             {
-                /*
-                 * 4WD toggle/button turned OFF.
-                 * Return to 2WD.
-                 */
-                printf("Attempting 2WD\r\n");
-                shift_position(motor_target_position, MODE_2WD);
+                last_debug_btn_count = DEBUG_BTN_COUNT;
+
+                printf("Stable DEBUG Button state: %d\r\n", PC13_STABLE_STATE);
+
+                if (PC13_STABLE_STATE == 0)
+                {
+                    if ((PC4_STABLE_STATE == 0) && (motor_target_position == MODE_AWD))
+                    {
+                        printf("Attempting Center Differential Lock\r\n");
+                        shift_position(motor_target_position, MODE_4X4);
+                    }
+                    else
+                    {
+                        printf("Center Diff Lock Button Press Ignored, AWD pre-state not met\r\n");
+                    }
+                }
+                else
+                {
+                    if ((PC4_STABLE_STATE == 0) && (motor_target_position == MODE_4X4))
+                    {
+                        printf("Attempting Center Differential Un-Lock\r\n");
+                        shift_position(motor_target_position, MODE_AWD);
+                    }
+                    else
+                    {
+                        printf("Center Diff Unlock Ignored\r\n");
+                    }
+                }
             }
         }
-
-        if (last_debug_btn_count != DEBUG_BTN_COUNT)
+        else if (motor_target_position != MODE_2WD)
         {
-            last_debug_btn_count = DEBUG_BTN_COUNT;
-
-            printf("Stable DEBUG Button state: %d\r\n", PC13_STABLE_STATE);
-
-            if (PC13_STABLE_STATE == 0)
-            {
-                /*
-                 * Diff lock button pressed.
-                 * Only lock if 4WD is ON and current position is AWD.
-                 */
-                if ((PC4_STABLE_STATE == 0) && (motor_target_position == MODE_AWD))
-                {
-                    printf("Attempting Center Differential Lock\r\n");
-                    shift_position(motor_target_position, MODE_4X4);
-                }
-                else
-                {
-                    printf("Center Diff Lock Button Press Ignored, AWD pre-state not met\r\n");
-                }
-            }
-            else
-            {
-                /*
-                 * Diff lock button released.
-                 * If 4WD is still ON and we are locked, unlock back to AWD.
-                 */
-                if ((PC4_STABLE_STATE == 0) && (motor_target_position == MODE_4X4))
-                {
-                    printf("Attempting Center Differential Un-Lock\r\n");
-                    shift_position(motor_target_position, MODE_AWD);
-                }
-                else
-                {
-                    printf("Center Diff Unlock Ignored\r\n");
-                }
-            }
+            printf("Attempting 2WD\r\n");
+            shift_position(motor_target_position, MODE_2WD);
         }
     }
 }
